@@ -1,5 +1,5 @@
 /** 추출 로직이 바뀌면 올린다. 값이 바뀌면 이전 기록(비교 기준)을 비운다. */
-export const EXTRACTOR_VERSION = 2
+export const EXTRACTOR_VERSION = 3 // 3: 품절임박을 품절로 잘못 판정하던 문제 수정
 
 /**
  * 쿠팡 장바구니 페이지 안에서 실행되는 추출 함수.
@@ -59,7 +59,8 @@ export function extractCart() {
     const qtyInput = row.querySelector<HTMLInputElement>('input.cart-quantity-input')
     const quantity = Number(qtyInput?.value) || 1
     const all = text(row)
-    const soldOut = /품절|일시\s*품절|재고\s*없음|구매\s*불가/.test(all)
+    // "품절임박 ∙ 2개 남음"은 품절이 아니다 → 먼저 지우고 판정
+    const soldOut = /품절|재고\s*없음|구매\s*불가/.test(all.replace(/품절\s*임박/g, ''))
 
     // 도착 예정: 신선(FRESH) 상품의 문구를 우선 사용
     const arrival = all.match(/(오늘|내일|모레|\d+\/\d+)\s*\([^)]*\)?\s*(새벽|오전|오후|저녁|밤)?\s*도착(\s*(예정|보장))?/)
