@@ -1,42 +1,78 @@
+/** 추출 로직이 바뀌면 올린다. 값이 바뀌면 이전 기록(비교 기준)을 비운다. */
+export const EXTRACTOR_VERSION = 2
+
 /**
  * 쿠팡 장바구니 페이지 안에서 실행되는 추출 함수.
  * chrome.scripting.executeScript({ func })로 주입되므로 **외부 변수·import를 참조하면 안 된다** (자기완결).
  *
- * ⚠️ 쿠팡 DOM 구조를 실제 로그인 상태에서 확인한 뒤 셀렉터를 다듬어야 한다.
- *    지금은 구조에 의존하지 않는 휴리스틱(가격 패턴이 든 가장 안쪽 행)을 쓴다.
- *    추출 실패 시 LLM 추출 대체(2단계)로 넘어간다.
+ * 쿠팡 장바구니 구조 (2026-11 확인):
+ *   상품 한 개   div[id^="item_"][data-bundle-id]   ← 추천 상품 영역에는 없음
+ *   상품명/옵션  #name a > span (첫 번째: 이름, 두 번째: "옵션: 30g, 1개")
+ *   가격 영역    [data-component-id="price-area"]   (취소선 = 정가, p = 단위가격)
+ *   도착 예정    "내일(금) 새벽 도착" 같은 초록색 문구
+ *   수량         input.cart-quantity-input
  * 주소·이름 등 개인정보 영역은 읽지 않는다.
  */
 export function extractCart() {
-  const PRICE = /([\d,]{3,})\s*원/
-  const SOLD_OUT = /품절|일시\s*품절|재고\s*없음/
-  const ARRIVAL = /(오늘|내일|새벽|당일|저녁|도착)[^\n]{0,30}(도착|배송)[^\n]{0,20}/
+  const text = (el: Element | null | undefined) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim()
+  const toNumber = (s: string) => {
+    const n = Number(s.replace(/[^\d]/g, ''))
+    return Number.isFinite(n) && n > 0 ? n : null
+  }
 
   if (/login\.coupang\.com/.test(location.href)) {
     return { loginRequired: true, items: [], arrivalText: null as string | null }
   }
 
-  const rows = Array.from(document.querySelectorAll<HTMLElement>('li, tr, [class*="cart"][class*="item" i], [class*="product" i]'))
-    .filter((el) => PRICE.test(el.innerText) && el.innerText.length < 400)
-    // 가장 안쪽 행만 사용 (자식 중에 같은 조건을 만족하는 요소가 있으면 제외)
-    .filter((el) => !Array.from(el.children).some((c) => c instanceof HTMLElement && PRICE.test(c.innerText) && c.matches('li, tr, [class*="item" i], [class*="product" i]')))
+  /** 가격 영역에서 최종 결제가 추출 (정가·단위가격·쿠폰 문구 제외) */
+  function readPrice(area: Element | null): number | null {
+    if (!area) return null
+    // 1순위: 굵은 숫자만 있는 span (예: <span class="... twc-font-bold">4,490</span>)
+    for (const el of area.querySelectorAll('span, strong, b')) {
+      const t = text(el)
+      if (/^[\d,]+$/.test(t) && /font-bold/.test(el.getAttribute('class') ?? '') && !el.closest('[class*="line-through"]')) {
+        return toNumber(t)
+      }
+    }
+    // 2순위: 정가(취소선)·단위가격(p)·쿠폰 문구를 지우고 처음 나오는 "N원"
+    const clone = area.cloneNode(true) as Element
+    clone.querySelectorAll('[class*="line-through"], p, img').forEach((e) => e.remove())
+    const m = text(clone)
+      .replace(/[\d,]+원\s*쿠폰[^\d]*/g, '')
+      .match(/([\d,]+)\s*원/)
+    return m ? toNumber(m[1]) : null
+  }
 
+  const rows = Array.from(document.querySelectorAll('div[id^="item_"][data-bundle-id]'))
   const seen = new Set<string>()
-  const items: { name: string; price: number | null; soldOut: boolean }[] = []
+  const items: { name: string; option: string | null; price: number | null; quantity: number; soldOut: boolean }[] = []
+  let arrivalText: string | null = null
 
   for (const row of rows) {
-    const lines = row.innerText.split('\n').map((s) => s.trim()).filter(Boolean)
-    const name = lines.find((l) => l.length >= 4 && !PRICE.test(l) && !SOLD_OUT.test(l) && !/^[\d,\s개]+$/.test(l))
+    // 모바일/PC 레이아웃이 둘 다 들어 있어 #name이 2번 나온다 → 첫 번째만
+    const spans = row.querySelectorAll('#name a span')
+    const name = text(spans[0])
     if (!name || seen.has(name)) continue
     seen.add(name)
-    const m = row.innerText.match(PRICE)
+
+    const option = text(spans[1]).replace(/^옵션\s*:\s*/, '') || null
+    const qtyInput = row.querySelector<HTMLInputElement>('input.cart-quantity-input')
+    const quantity = Number(qtyInput?.value) || 1
+    const all = text(row)
+    const soldOut = /품절|일시\s*품절|재고\s*없음|구매\s*불가/.test(all)
+
+    // 도착 예정: 신선(FRESH) 상품의 문구를 우선 사용
+    const arrival = all.match(/(오늘|내일|모레|\d+\/\d+)\s*\([^)]*\)?\s*(새벽|오전|오후|저녁|밤)?\s*도착(\s*(예정|보장))?/)
+    if (arrival && (!arrivalText || row.getAttribute('data-type') === 'FRESH')) arrivalText = arrival[0].trim()
+
     items.push({
       name: name.slice(0, 80),
-      price: m ? Number(m[1].replace(/,/g, '')) : null,
-      soldOut: SOLD_OUT.test(row.innerText),
+      option: option?.slice(0, 40) ?? null,
+      price: readPrice(row.querySelector('[data-component-id="price-area"]')),
+      quantity,
+      soldOut,
     })
   }
 
-  const arrival = document.body.innerText.match(ARRIVAL)
-  return { loginRequired: false, items, arrivalText: arrival ? arrival[0].trim() : null }
+  return { loginRequired: false, items, arrivalText }
 }

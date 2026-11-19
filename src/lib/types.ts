@@ -1,6 +1,8 @@
 export interface CartItem {
   name: string
-  price: number | null
+  option?: string | null // 예: "30g, 1개"
+  price: number | null // 쿠폰 등 적용된 최종가 (1개 기준)
+  quantity?: number
   soldOut: boolean
 }
 

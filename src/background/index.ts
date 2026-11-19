@@ -3,6 +3,7 @@ import { ALARM_NAME, MAX_RUNS_PER_DAY } from '../lib/config'
 import { addLog, computeDiff, consumeDailyQuota, getKey, getSettings, pushSnapshot } from '../lib/storage'
 import { formatMessage } from '../lib/message'
 import { collectCart } from './collect'
+import { EXTRACTOR_VERSION } from './extract'
 
 const REASON_TEXT = {
   login_required: '쿠팡 로그인이 만료됐어요. 다시 로그인해 주세요.',
@@ -43,6 +44,10 @@ export async function runCheck(manual = false): Promise<string> {
     return msg
   }
 
+  // 추출 방식이 바뀌었으면 예전 기록과 비교하지 않는다 (엉뚱한 변동 알림 방지)
+  if ((await getKey<number>('extractorVersion')) !== EXTRACTOR_VERSION) {
+    await chrome.storage.local.set({ history: [], extractorVersion: EXTRACTOR_VERSION })
+  }
   const previous = await pushSnapshot(result.snapshot)
   const diff = computeDiff(previous, result.snapshot)
 
