@@ -1,7 +1,7 @@
-import { fetchBriefing, sendKakao } from '../lib/api'
+import { sendKakao } from '../lib/api'
 import { ALARM_NAME, MAX_RUNS_PER_DAY } from '../lib/config'
 import { addLog, computeDiff, consumeDailyQuota, getKey, getSettings, pushSnapshot } from '../lib/storage'
-import type { Diff, Snapshot } from '../lib/types'
+import { formatMessage } from '../lib/message'
 import { collectCart } from './collect'
 
 const REASON_TEXT = {
@@ -18,17 +18,6 @@ function notify(title: string, message: string) {
     title,
     message,
   })
-}
-
-/** 서버(LLM)가 안 될 때 쓰는 로컬 요약 */
-function localBriefing(snapshot: Snapshot, diff: Diff): string {
-  const parts: string[] = []
-  if (snapshot.arrivalText) parts.push(snapshot.arrivalText)
-  for (const c of diff.priceChanges) parts.push(`${c.name} ${c.to - c.from > 0 ? '+' : ''}${c.to - c.from}원`)
-  for (const n of diff.newlySoldOut) parts.push(`${n} 품절`)
-  for (const n of diff.backInStock) parts.push(`${n} 재입고`)
-  if (parts.length === 0) parts.push(`장바구니 ${snapshot.items.length}개 상품, 변동 없음`)
-  return parts.join(' · ')
 }
 
 /** 카카오톡으로 보내고, 실패하면 크롬 알림으로 대체한다. */
@@ -57,14 +46,8 @@ export async function runCheck(manual = false): Promise<string> {
   const previous = await pushSnapshot(result.snapshot)
   const diff = computeDiff(previous, result.snapshot)
 
-  let text: string
-  try {
-    text = await fetchBriefing(result.snapshot, diff)
-  } catch {
-    text = localBriefing(result.snapshot, diff)
-  }
-
-  await deliver('CooAlert 장바구니 브리핑', text)
+  const text = formatMessage(result.snapshot, diff)
+  await deliver('CooAlert 장바구니 알림', text)
   await addLog({ at: Date.now(), ok: true, message: text })
   return text
 }

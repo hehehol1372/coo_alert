@@ -10,11 +10,10 @@ export interface KakaoTokens {
 export class KakaoAuthError extends Error {}
 
 async function tokenRequest(params: Record<string, string>): Promise<KakaoTokens> {
-  const body = new URLSearchParams({
-    client_id: requireEnv('KAKAO_REST_API_KEY'),
-    client_secret: requireEnv('KAKAO_CLIENT_SECRET'),
-    ...params,
-  })
+  const body = new URLSearchParams({ client_id: requireEnv('KAKAO_REST_API_KEY'), ...params })
+  // Client Secret은 카카오 콘솔에서 "사용함"으로 켠 경우에만 필요 (선택)
+  const secret = process.env.KAKAO_CLIENT_SECRET
+  if (secret) body.set('client_secret', secret)
   const res = await fetch('https://kauth.kakao.com/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },

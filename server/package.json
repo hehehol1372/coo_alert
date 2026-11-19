@@ -10,9 +10,6 @@
   "engines": {
     "node": ">=22"
   },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^1.10.0"
-  },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "typescript": "~5.9"

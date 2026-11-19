@@ -1,6 +1,5 @@
 import { SERVER_URL } from './config'
 import { getInstallId, getKey } from './storage'
-import type { Diff, Snapshot } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -18,16 +17,6 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   })
   if (!res.ok) throw new ApiError(res.status, `${path} ${res.status}`)
   return (await res.json()) as T
-}
-
-/** LLM 브리핑 생성. 개인정보(주소·이름)는 애초에 수집하지 않으며, 상품명/가격/품절/도착문구만 보낸다. */
-export async function fetchBriefing(snapshot: Snapshot, diff: Diff): Promise<string> {
-  const { text } = await post<{ text: string }>('/api/briefing', {
-    items: snapshot.items,
-    arrivalText: snapshot.arrivalText,
-    diff,
-  })
-  return text
 }
 
 interface KakaoStore {
