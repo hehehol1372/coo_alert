@@ -2,10 +2,16 @@
 // 변동 계산은 확장이 코드로 끝낸 상태이고, LLM은 그 결과를 짧은 카톡 문장으로 정리만 한다.
 // 입력에는 상품명/가격/품절/도착 문구만 있다 (주소·이름 등 개인정보 없음).
 import Anthropic from '@anthropic-ai/sdk'
-import { checkInstallId, error, json, readJson } from '../lib/http.js'
+import { checkInstallId, error, json, readJson, requireEnv, unexpected } from '../lib/http.js'
 
 const MODEL = 'claude-haiku-5-5'
-const client = new Anthropic() // ANTHROPIC_API_KEY 환경변수 사용
+let client: Anthropic | null = null
+
+/** 요청 시점에 생성: 키가 없으면 모듈 로딩이 아니라 요청에서 원인을 알려준다 */
+function getClient(): Anthropic {
+  client ??= new Anthropic({ apiKey: requireEnv('ANTHROPIC_API_KEY') })
+  return client
+}
 
 interface Item {
   name: string
@@ -66,7 +72,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const res = await client.messages.create({
+    const res = await getClient().messages.create({
       model: MODEL,
       max_tokens: 2000,
       output_config: { effort: 'low' },
@@ -85,9 +91,8 @@ export async function POST(req: Request): Promise<Response> {
     if (e instanceof Anthropic.RateLimitError) return error(429, 'rate limited')
     if (e instanceof Anthropic.APIError) {
       console.error('anthropic', e.status, e.message)
-      return error(502, 'llm error')
+      return error(502, `llm error ${e.status ?? ''}`.trim())
     }
-    console.error(e)
-    return error(500, 'internal error')
+    return unexpected(e)
   }
 }

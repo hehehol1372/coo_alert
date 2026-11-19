@@ -1,7 +1,7 @@
 // POST /api/kakao/send  { text, refreshToken } → 나에게 보내기
 // 하루 몇 번만 호출되므로 매번 refresh token으로 access token을 새로 받는다 (서버 무상태).
 // 카카오가 새 refresh token을 주면 응답에 담아 확장이 교체 저장하게 한다.
-import { checkInstallId, error, json, readJson } from '../../lib/http.js'
+import { checkInstallId, error, json, readJson, unexpected } from '../../lib/http.js'
 import { KakaoAuthError, refresh, sendToMe } from '../../lib/kakao.js'
 
 export async function POST(req: Request): Promise<Response> {
@@ -17,7 +17,6 @@ export async function POST(req: Request): Promise<Response> {
   } catch (e) {
     // 401 → 확장이 "카카오 재로그인 필요"를 안내한다
     if (e instanceof KakaoAuthError) return error(401, 'kakao_reauth_required')
-    console.error(e)
-    return error(502, 'kakao send failed')
+    return unexpected(e, 502, 'kakao send failed')
   }
 }

@@ -26,10 +26,20 @@ export async function readJson<T>(req: Request, maxBytes = 20_000): Promise<T | 
   }
 }
 
+/** 서버 설정 누락 (환경변수 이름은 비밀이 아니므로 응답에 포함해도 된다) */
+export class ConfigError extends Error {}
+
 export function requireEnv(name: string): string {
   const v = process.env[name]
-  if (!v) throw new Error(`환경변수 ${name}가 설정되지 않았습니다`)
+  if (!v) throw new ConfigError(`missing env: ${name}`)
   return v
+}
+
+/** 처리되지 않은 예외 → 설정 누락이면 원인을 알려주고, 아니면 로그만 남긴다 */
+export function unexpected(e: unknown, status = 500, message = 'internal error'): Response {
+  if (e instanceof ConfigError) return error(500, e.message)
+  console.error(e)
+  return error(status, message)
 }
 
 /** 크롬 확장 identity API의 리다이렉트 주소만 허용 */
