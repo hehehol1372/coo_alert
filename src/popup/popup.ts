@@ -27,7 +27,7 @@ async function renderItems() {
   const ol = document.createElement('ol')
   for (const i of last.items) {
     const li = document.createElement('li')
-    li.textContent = `${i.name}${i.option ? ` (${i.option})` : ''}${i.quantity && i.quantity > 1 ? ` ×${i.quantity}` : ''} — ${i.price == null ? '가격 없음' : `${i.price.toLocaleString('ko-KR')}원`}${i.soldOut ? ' (품절)' : ''}`
+    li.textContent = `${i.name}${i.option ? ` (${i.option})` : ''}${i.quantity && i.quantity > 1 ? ` ×${i.quantity}` : ''} — ${i.price == null ? '가격 없음' : `${i.price.toLocaleString('ko-KR')}원`}${i.soldOut ? ' (품절)' : ''}${i.lowStock != null && !i.soldOut ? ` (품절임박${i.lowStock ? ` ${i.lowStock}` : ''})` : ''}`
     ol.append(li)
   }
   $('items').replaceChildren(title, ol)

@@ -45,7 +45,14 @@ export function extractCart() {
 
   const rows = Array.from(document.querySelectorAll('div[id^="item_"][data-bundle-id]'))
   const seen = new Set<string>()
-  const items: { name: string; option: string | null; price: number | null; quantity: number; soldOut: boolean }[] = []
+  const items: {
+    name: string
+    option: string | null
+    price: number | null
+    quantity: number
+    soldOut: boolean
+    lowStock: string | null
+  }[] = []
   let arrivalText: string | null = null
 
   for (const row of rows) {
@@ -61,6 +68,9 @@ export function extractCart() {
     const all = text(row)
     // "품절임박 ∙ 2개 남음"은 품절이 아니다 → 먼저 지우고 판정
     const soldOut = /품절|재고\s*없음|구매\s*불가/.test(all.replace(/품절\s*임박/g, ''))
+    // 품절임박: "품절임박 ∙ 2개 남음" → "2개 남음" (수량 문구가 없으면 빈 문자열)
+    const low = all.match(/품절\s*임박(?:\s*[∙·•・-]?\s*(\d+\s*개\s*남음))?/)
+    const lowStock = low ? (low[1] ?? '').replace(/\s+/g, ' ') : null
 
     // 도착 예정: 신선(FRESH) 상품의 문구를 우선 사용
     const arrival = all.match(/(오늘|내일|모레|\d+\/\d+)\s*\([^)]*\)?\s*(새벽|오전|오후|저녁|밤)?\s*도착(\s*(예정|보장))?/)
@@ -72,6 +82,7 @@ export function extractCart() {
       price: readPrice(row.querySelector('[data-component-id="price-area"]')),
       quantity,
       soldOut,
+      lowStock: soldOut ? null : lowStock,
     })
   }
 

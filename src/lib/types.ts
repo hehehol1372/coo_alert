@@ -4,6 +4,7 @@ export interface CartItem {
   price: number | null // 쿠폰 등 적용된 최종가 (1개 기준)
   quantity?: number
   soldOut: boolean
+  lowStock?: string | null // 품절임박이면 남은 수량 문구 (예: "2개 남음"), 수량 표시가 없으면 ""
 }
 
 /** 장바구니 한 번 조회한 결과 */

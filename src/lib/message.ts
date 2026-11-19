@@ -24,9 +24,13 @@ export function formatMessage(snapshot: Snapshot, diff: Diff, now = new Date()):
   const time = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`
   const header = [`🛒 장바구니 확인 ${time}`, `⏰ ${[deadlineText(now), snapshot.arrivalText].filter(Boolean).join(' · ')}`]
 
-  // 중요한 순서: 품절 → 가격 인상 → 가격 인하 → 재입고
+  // 중요한 순서: 품절 → 품절임박 → 가격 인상 → 가격 인하 → 재입고
+  // 품절임박은 변동이 아니라 현재 상태라서 확인할 때마다 표시한다
   const changes: string[] = [
     ...diff.newlySoldOut.map((n) => `❌ ${n} 품절`),
+    ...snapshot.items
+      .filter((i) => i.lowStock != null && !i.soldOut)
+      .map((i) => `⚠️ ${i.name} 품절임박${i.lowStock ? ` (${i.lowStock})` : ''}`),
     ...diff.priceChanges
       .filter((c) => c.to > c.from)
       .map((c) => `📈 ${c.name} ${won(c.from)}→${won(c.to)}원 (+${won(c.to - c.from)})`),
